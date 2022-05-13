@@ -85,6 +85,8 @@ public class Preprocessing {
 	private INDArray inputArray;
 	
 	private String configFileName;
+	
+	private String axesOrder;
 
 	/**
 	 * Constructor that adds the input image to the 
@@ -104,6 +106,10 @@ public class Preprocessing {
 	
 	public void setInputFileName(String name) {
 		configFileName = name;
+	}
+	
+	public void setAxesOrder(String str) {
+		axesOrder = str;
 	}
 
 	/**
@@ -302,13 +308,13 @@ public class Preprocessing {
               on min_dim and min_scale, then picks a random crop of
               size min_dim x min_dim. Can be used in training only.
               max_dim is not used in this mode.
-     * @return modified image
      */
-    private ImagePlus resizeImage(ImagePlus image, int minDim, double minScale, int maxDim, 
+    private void resizeImage(INDArray image, int minDim, double minScale, int maxDim, 
     								String mode) {
     	// Default window is the whole image and default scale is 1
-    	int w = image.getWidth();
-    	int h = image.getHeight();
+    	int w = (int) image.shape()[axesOrder.toLowerCase().indexOf("x")];
+    	int h = (int) image.shape()[axesOrder.toLowerCase().indexOf("y")];
+    	int c = (int) image.shape()[axesOrder.toLowerCase().indexOf("c")];
     	float[] window = new float[] {0, 0, h, w};
     	double scale = 1.0;
     	double[][] padding = new double[3][2];
@@ -316,7 +322,7 @@ public class Preprocessing {
     	if (mode.equals("none")) {
     		SCALE = scale;
     		WINDOW_SIZE = window;
-        	return image;
+        	return;
     		
     	}
     	
@@ -332,7 +338,7 @@ public class Preprocessing {
     		scale = maxDim / imageMax;
     	}
 
-        final float[] originalImShape = { (float)image.getHeight(), (float)image.getWidth(), (float)image.getNChannels() };
+        final float[] originalImShape = { (float) h, (float) w, (float) c };
     	// Obtain the image meta data
     	ORIGINAL_IMAGE_SIZE = originalImShape;
     	
@@ -343,8 +349,9 @@ public class Preprocessing {
     	// Check if padding is needed
     	if (mode.equals("square")) {
     		// Get the new h and w
-        	w = image.getWidth();
-        	h = image.getHeight();
+        	w = (int) image.shape()[axesOrder.toLowerCase().indexOf("x")];
+        	h = (int) image.shape()[axesOrder.toLowerCase().indexOf("y")];
+        	c = (int) image.shape()[axesOrder.toLowerCase().indexOf("c")];
         	double topPad = Math.floor((maxDim - h) / 2.0);
         	double bottomPad = maxDim - h - topPad;
         	double leftPad = Math.floor((maxDim - w) / 2.0);
@@ -355,12 +362,14 @@ public class Preprocessing {
         	window = new float[] {(float) topPad, (float) leftPad, (float) (h + topPad), (float) (w + leftPad)};
     	} else if (mode.equals("pad64")) {
     		// Get the new h and w
-        	w = image.getWidth();
-        	h = image.getHeight();
+        	w = (int) image.shape()[axesOrder.toLowerCase().indexOf("x")];
+        	h = (int) image.shape()[axesOrder.toLowerCase().indexOf("y")];
+        	c = (int) image.shape()[axesOrder.toLowerCase().indexOf("c")];
         	if (h % 64 != 0 || w % 64 != 0) {
         		ERROR = "The 'IMAGE_RESIZE_MODE = pad64' can only be applied to images\n"
         				+ "whose height and width are multiple of 64.";
-        		return null;
+        		throw new Exception(ERROR);
+        		return;
         	}
         	// Height
         	int topPad = 0;
@@ -386,19 +395,21 @@ public class Preprocessing {
     		ERROR = "This Java Mask R-CNN pre-processing does not support 'IMAGE_RESIZE_MODE = crop',\n"
     				+ "please change the parameter IMAGE_RESIZE_MODE to 'square' or 'pad64' in the\n"
     				+ "config pre-preprocessing file.";
-    		return null;
+    		throw new Exception(ERROR);
+    		return;
     	} else {
     		ERROR = "The config file information for the parameter 'IMAGE_RESIZE_MODE' is incorrect."
     				+ "\nThe value provided in the config file (" + CONFIG_FILE_PATH + "')\n"
 					+ "is '" + mode + "'. However the only values allowed are: 'square', 'pad64' and 'XXX'.";
-    		return null;
+    		throw new Exception(ERROR);
+    		return;
     	}
     	
     	// Set the class attributes to be used later
     	WINDOW_SIZE = window;
     	SCALE = scale;
 
-    	return image;
+    	return;
     }
     
     /**
