@@ -35,16 +35,15 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-import ij.process.ImageConverter;
-import ij.process.ImageProcessor;
 import java.util.Set;
+
+import org.bioimageanalysis.icy.deeplearning.tensor.Tensor;
+import org.nd4j.linalg.api.ndarray.INDArray;
+
 import utils.MaskRcnnMetas;
-import org.tensorflow.Tensor;
 
 import utils.ImageProcessingUtils;
 import utils.MaskRcnnAnchors;
-import ij.IJ;
-import ij.ImagePlus;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -55,10 +54,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import deepimagej.processing.PreProcessingInterface;
 
 
-public class Preprocessing implements PreProcessingInterface {
+public class Preprocessing {
+	
 	/**
 	 * Dictionary containing all the parameters parsed from the file
 	 */
@@ -80,11 +79,36 @@ public class Preprocessing implements PreProcessingInterface {
 	private float[] PROCESSING_IMAGE_SIZE;
 	private double SCALE;
 	int NUM_CLASSES = 0;
+	
+	private Tensor inputTensor;
+	
+	private INDArray inputArray;
+	
+	private String configFileName;
+
+	/**
+	 * Constructor that adds the input image to the 
+	 * @param inpTensor
+	 */
+	public Preprocessing(Tensor inpTensor) {
+		inputTensor = inpTensor;
+	}
+	
+	/**
+	 * Constructor that adds the input image to the 
+	 * @param inpTensor
+	 */
+	public Preprocessing(INDArray array) {
+		inputArray = array;
+	}
+	
+	public void setInputFileName(String name) {
+		configFileName = name;
+	}
 
 	/**
 	 * Return error that stopped pre-processing to DeepImageJ
 	 */
-	@Override
 	public String error() {
 		return ERROR;
 	}
@@ -108,28 +132,22 @@ public class Preprocessing implements PreProcessingInterface {
 	 * To create DJL NDArrays:
 	 * See <a href="https://javadoc.io/doc/ai.djl/api/latest/ai/djl/ndarray/NDManager.html">https://javadoc.io/doc/ai.djl/api/latest/ai/djl/ndarray/NDManager.html</a>
 	 */
-    public HashMap<String, Object> deepimagejPreprocessing(final HashMap<String, Object> inputMap) {
-        final Set<String> keys = inputMap.keySet();
-        ImagePlus im = null;
-        for (final String k : keys) {
-            if (k.equals(CONFIG.get("INPUT_IMAGE"))) {
-                im = (ImagePlus) inputMap.get(k);
-            }
-        }
+    public HashMap<String, Object> apply() {
+    	
+    	if (inputTensor != null) {
+    		inputArray = inputTensor.getDataAsNDArray();
+    	} else if (inputArray == null) {
+    		throw new Exception("Runnning the pre-processing requires some input tensor.");
+    	}
         
-        // If the image is not 32-bit, covert it to 32-bit
-        if (im.getBitDepth() != 32) {
-	    	ImageConverter converter = new ImageConverter(im);
-	    	converter.convertToGray32();
-        }
+    	// TODO require the image to be 32 bit or convert it here
 
         // Create the dictionary of outputs that is going to be outpued by the pre-processing
         final HashMap<String, Object> map = new HashMap<String, Object>();
         // Create the ImagePlus that is going to result from pre-processing and apply the corresponding transformations
         //ImagePlus result = IJ.createImage(im.getTitle(), "32-bit", im.getWidth(), im.getHeight(), im.getNChannels(), im.getNSlices(), 1);
-        ImagePlus result = moldInputs(im);
-        if (result == null)
-        	return null;
+        moldInputs(inputArray);
+        
         MaskRcnnAnchors mrccAnchors = new MaskRcnnAnchors(CONFIG);
         final float[][][] imageAnchors = MaskRcnnAnchors.getAnchors(result);
         final Tensor<Float> anchors = (Tensor<Float>)Tensor.create((Object)imageAnchors, (Class)Float.class);
@@ -189,7 +207,7 @@ public class Preprocessing implements PreProcessingInterface {
      *  @return the modified image ready to be processed
      *  
      */
-    private ImagePlus moldInputs(ImagePlus image) {
+    private void moldInputs(INDArray image) {
         // Get the parameters from the class atribute dictionary
     	int IMAGE_MIN_DIM = 0;
     	double IMAGE_MIN_SCALE = 0;
@@ -205,8 +223,7 @@ public class Preprocessing implements PreProcessingInterface {
     	} catch (Exception ex) {
     		ERROR = "Cannot parse correctly the parameters 'IMAGE_MIN_DIM', 'IMAGE_MIN_SCALE',\n"
     				+ "'IMAGE_MAX_DIM', 'IMAGE_RESIZE_MODE' and 'NUM_CLASSES' from the config file.";
-    		IJ.error("Missing parameter.");
-    		return null;
+    		throw new Exception(ERROR);
     	}
     	ImagePlus moldedImage = resizeImage(image, IMAGE_MIN_DIM, IMAGE_MIN_SCALE, IMAGE_MAX_DIM, IMAGE_RESIZE_MODE);
     	// If resizing was not successful and no image was obtained, exit the method and return null
