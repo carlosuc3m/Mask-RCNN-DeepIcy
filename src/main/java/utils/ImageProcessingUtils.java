@@ -37,9 +37,7 @@
 
 package utils;
 
-import ij.IJ;
-import ij.ImagePlus;
-import ij.process.ImageProcessor;
+import org.nd4j.linalg.api.ndarray.INDArray;
 
 public class ImageProcessingUtils {
 	
@@ -50,7 +48,7 @@ public class ImageProcessingUtils {
      * @param height: height to be resized
      * @return resized image
      */
-    public static ImagePlus resize(ImagePlus im, int width, int height) {
+    public static void resize(INDArray im, int width, int height) {
     	im.getProcessor().setInterpolationMethod(2);
     	ImagePlus resizedImage = IJ.createHyperStack(im.getTitle(), width, height, im.getNChannels(), im.getNSlices(), im.getNFrames(), 32);
     	for (int c = 0; c < resizedImage.getNChannels(); c ++) {
