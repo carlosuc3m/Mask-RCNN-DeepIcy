@@ -42,7 +42,6 @@ import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 
 import utils.MaskRcnnMetas;
-import utils.Resize;
 import utils.ImageProcessingUtils;
 import utils.MaskRcnnAnchors;
 
@@ -156,7 +155,7 @@ public class Preprocessing {
         moldInputs(inputArray);
         
         MaskRcnnAnchors mrccAnchors = new MaskRcnnAnchors(CONFIG);
-        final float[][][] imageAnchors = MaskRcnnAnchors.getAnchors(result);
+        final float[][][] imageAnchors = MaskRcnnAnchors.getAnchors(result, axesOrder);
         final Tensor<Float> anchors = (Tensor<Float>)Tensor.create((Object)imageAnchors, (Class)Float.class);
         
         //final float[][] imageMetas = MaskRcnnMetas.composeImageMeta(im);
@@ -235,7 +234,7 @@ public class Preprocessing {
     	resizeImage(image, IMAGE_MIN_DIM, IMAGE_MIN_SCALE, IMAGE_MAX_DIM, IMAGE_RESIZE_MODE);
     	
     	long[] shape = image.shape();
-    	final float[] finalShape = { (float)shape[axesOrder.indexOf("x")], (float)shape[axesOrder.indexOf("y")], (float)shape[axesOrder.indexOf("c")] };
+    	final float[] finalShape = { (float)shape[axesOrder.indexOf("y")], (float)shape[axesOrder.indexOf("x")], (float)shape[axesOrder.indexOf("c")] };
     	moldImage(image, CONFIG);
     	
     	// Obtain the image meta data
@@ -281,7 +280,6 @@ public class Preprocessing {
     				+ " * RUNTIME_PARAMETER: WINDOW_SIZE = [112.0, 83.0, 912.0, 940.0]";
     		throw new IllegalArgumentException("Missing/Incorrect parameter: MEAN_PIXEL.\n" + ERROR);
     	}
-    	return moldedImage;
     }
     
     /**

@@ -37,11 +37,10 @@
 
 package utils;
 
-import ij.ImagePlus;
-
 import java.util.HashMap;
 
-import ij.IJ;
+import org.nd4j.linalg.api.ndarray.INDArray;
+
 
 public class MaskRcnnAnchors {
 	
@@ -86,13 +85,10 @@ public class MaskRcnnAnchors {
     	}
     }
     
-    public static void main(final String[] args) {
-        final ImagePlus im = IJ.createImage("aux", 1024, 1024, 1, 24);
-        final float[][][] a = getAnchors(im);
-    }
-    
-    public static float[][][] getAnchors(final ImagePlus im) {
-        final float[] imShape = { (float)im.getHeight(), (float)im.getWidth(), (float)im.getNChannels() };
+    public static float[][][] getAnchors(final INDArray im, String axesOrder) {
+    	long[] shape = im.shape();
+        final float[] imShape = { (float)shape[axesOrder.indexOf("y")], (float)shape[axesOrder.indexOf("x")],
+        		(float)shape[axesOrder.indexOf("c")] };
         final float[][] backboneShapes = computeBackboneShapes(imShape);
         final float[][] anchors = generatePyramidAnchors(MaskRcnnAnchors.RPN_ANCHOR_SCALES, MaskRcnnAnchors.RPN_ANCHOR_RATIOS, backboneShapes, MaskRcnnAnchors.BACKBONE_STRIDES, MaskRcnnAnchors.RPN_ANCHOR_STRIDE, imShape);
         final float[][][] tensorAnchors = new float[1][anchors.length][anchors[0].length];
