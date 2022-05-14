@@ -66,6 +66,7 @@ public class ImageProcessingUtils {
 			}
 		}
 		im.data().setData(targetArr);
+    	im.reshape(targetShape);
 	}
     
     /**
@@ -115,12 +116,16 @@ public class ImageProcessingUtils {
     						nPosition[axesOrder.toLowerCase().indexOf("c")] = cc;
     						nPosition[axesOrder.toLowerCase().indexOf("z")] = zz;
     						nPosition[axesOrder.toLowerCase().indexOf("b")] = tt;
-    						
+							int pos = getFlatPosOfNDArray(position, shape);
+							int nPos = getFlatPosOfNDArray(nPosition, nShape);
+							targetArr[nPos] = sourceArr[pos];
     					}
     				}
     			}
     		}
     	}
+    	image.data().setData(targetArr);
+    	image.reshape(nShape);
     }
     
     /**

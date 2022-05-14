@@ -344,7 +344,7 @@ public class Preprocessing {
     	ORIGINAL_IMAGE_SIZE = originalImShape;
     	
     	if (scale != 1) {
-    		Resize.upscaleXY(image, (int)Math.round(w * scale), (int)Math.round(h * scale), axesOrder);
+    		ImageProcessingUtils.upscaleXY(image, (int)Math.round(w * scale), (int)Math.round(h * scale), axesOrder);
     	}
     	
     	// Check if padding is needed
