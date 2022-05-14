@@ -49,6 +49,7 @@ public class ImageProcessingUtils {
      * @return resized image
      */
     public static void resize(INDArray im, int width, int height) {
+    	im.data().flush();
     	im.getProcessor().setInterpolationMethod(2);
     	ImagePlus resizedImage = IJ.createHyperStack(im.getTitle(), width, height, im.getNChannels(), im.getNSlices(), im.getNFrames(), 32);
     	for (int c = 0; c < resizedImage.getNChannels(); c ++) {
