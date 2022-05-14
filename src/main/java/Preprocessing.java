@@ -40,6 +40,8 @@ import java.util.Set;
 import org.bioimageanalysis.icy.deeplearning.tensor.Tensor;
 import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.indexing.INDArrayIndex;
+import org.nd4j.linalg.indexing.NDArrayIndex;
 
 import utils.MaskRcnnMetas;
 import utils.ImageProcessingUtils;
@@ -248,8 +250,13 @@ public class Preprocessing {
      * @param config: HashMap containing every parameter
      * @return modified image
      */
-    private static void moldImage(INDArray moldedImage, HashMap<String, String> config) {
+    private void moldImage(INDArray moldedImage, HashMap<String, String> config) {
 
+		int cInd = axesOrder.indexOf("c");
+		if (cInd == -1 || moldedImage.shape()[cInd] != 3) {
+			throw new IllegalArgumentException("The input images should contain 3 channels. This one"
+					+ " has " + moldedImage.shape()[cInd]);
+		}
     	String MEAN_PIXEL_STRING;
     	try {
     		MEAN_PIXEL_STRING = config.get("MEAN_PIXEL");
@@ -259,20 +266,14 @@ public class Preprocessing {
     		for (int i = 0; i < aux.length; i ++) {
     			MEAN_PIXEL[i] = Float.parseFloat(aux[i]);
     		}
-        	for (int t = 0; t < moldedImage.getNFrames(); t ++) {
-    	    	for (int z = 0; z < moldedImage.getNSlices(); z ++) {
-    		    	for (int c = 0; c < moldedImage.getNChannels(); c ++) {
-    		    		 moldedImage.setPositionWithoutUpdate(c + 1, z + 1, t + 1);
-    		             ImageProcessor ip = moldedImage.getProcessor();
-    		             for (int i = 0; i < moldedImage.getWidth(); i ++) {
-    		                 for (int j = 0; j < moldedImage.getHeight(); j ++) {
-    		                     ip.putPixelValue(i, j, ip.getPixelValue(i, j) - MEAN_PIXEL[c]);
-    		                 }
-    		             }
-    		             moldedImage.setProcessor(ip);
-    		        }
-    	    	}
-        	}
+    		INDArrayIndex[] idxs = new INDArrayIndex[axesOrder.length()];
+    		for (int i = 0; i < idxs.length; i ++) {
+    			idxs[i] = NDArrayIndex.all();
+    		}
+    		for (int i = 0; i < MEAN_PIXEL.length; i ++) {
+    			idxs[cInd] = NDArrayIndex.point(i);
+    			moldedImage.put(idxs, moldedImage.get(idxs).add(-1 * MEAN_PIXEL[i]));
+    		}
     	} catch (Exception ex) {
     		ERROR = "The config file information for the parameter 'MEAN_PIXEL' is incorrect or not present."
     				+ "\nThe value provided in the config file (" + CONFIG_FILE_PATH + "'\n"
