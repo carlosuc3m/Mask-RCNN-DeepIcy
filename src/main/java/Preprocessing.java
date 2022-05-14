@@ -232,17 +232,15 @@ public class Preprocessing {
     				+ "'IMAGE_MAX_DIM', 'IMAGE_RESIZE_MODE' and 'NUM_CLASSES' from the config file.";
     		throw new Exception(ERROR);
     	}
-    	ImagePlus moldedImage = resizeImage(image, IMAGE_MIN_DIM, IMAGE_MIN_SCALE, IMAGE_MAX_DIM, IMAGE_RESIZE_MODE);
-    	// If resizing was not successful and no image was obtained, exit the method and return null
-    	if (moldedImage == null)
-    		return null;
-    	final float[] finalShape = { (float)moldedImage.getHeight(), (float)moldedImage.getWidth(), (float)moldedImage.getNChannels() };
-    	moldedImage = moldImage(moldedImage, CONFIG);
+    	resizeImage(image, IMAGE_MIN_DIM, IMAGE_MIN_SCALE, IMAGE_MAX_DIM, IMAGE_RESIZE_MODE);
+    	
+    	long[] shape = image.shape();
+    	final float[] finalShape = { (float)shape[axesOrder.indexOf("x")], (float)shape[axesOrder.indexOf("y")], (float)shape[axesOrder.indexOf("c")] };
+    	moldImage(image, CONFIG);
     	
     	// Obtain the image meta data
     	PROCESSING_IMAGE_SIZE = finalShape;
     	
-    	return moldedImage;
     }
     
     /**
@@ -251,7 +249,7 @@ public class Preprocessing {
      * @param config: HashMap containing every parameter
      * @return modified image
      */
-    private static ImagePlus moldImage(ImagePlus moldedImage, HashMap<String, String> config) {
+    private static void moldImage(INDArray moldedImage, HashMap<String, String> config) {
 
     	String MEAN_PIXEL_STRING;
     	try {
@@ -281,8 +279,7 @@ public class Preprocessing {
     				+ "\nThe value provided in the config file (" + CONFIG_FILE_PATH + "'\n"
     				+ "should be something like the following:\n"
     				+ " * RUNTIME_PARAMETER: WINDOW_SIZE = [112.0, 83.0, 912.0, 940.0]";
-    		IJ.error("Missing/Incorrect parameter: MEAN_PIXEL.");
-    		return null;
+    		throw new IllegalArgumentException("Missing/Incorrect parameter: MEAN_PIXEL.\n" + ERROR);
     	}
     	return moldedImage;
     }
@@ -359,7 +356,7 @@ public class Preprocessing {
         	double rightPad = maxDim - w - leftPad;
         	padding[0][0] = topPad; padding[0][1] = bottomPad;
         	padding[1][0] = leftPad; padding[1][1] = rightPad;
-        	image = ImageProcessingUtils.pad(image, padding, 0);
+        	ImageProcessingUtils.pad(image, padding, 0, axesOrder);
         	window = new float[] {(float) topPad, (float) leftPad, (float) (h + topPad), (float) (w + leftPad)};
     	} else if (mode.equals("pad64")) {
     		// Get the new h and w
@@ -369,8 +366,7 @@ public class Preprocessing {
         	if (h % 64 != 0 || w % 64 != 0) {
         		ERROR = "The 'IMAGE_RESIZE_MODE = pad64' can only be applied to images\n"
         				+ "whose height and width are multiple of 64.";
-        		throw new Exception(ERROR);
-        		return;
+        		throw new IllegalArgumentException(ERROR);
         	}
         	// Height
         	int topPad = 0;
@@ -390,20 +386,18 @@ public class Preprocessing {
             }
         	padding[0][0] = topPad; padding[0][1] = bottomPad;
         	padding[1][0] = leftPad; padding[1][1] = rightPad;
-        	image = ImageProcessingUtils.pad(image, padding, 0);
+        	ImageProcessingUtils.pad(image, padding, 0, axesOrder);
         	window = new float[] {(float) topPad, (float) leftPad, (float) (h + topPad), (float) (w + leftPad)};
     	} else if (mode.equals("crop")) {
     		ERROR = "This Java Mask R-CNN pre-processing does not support 'IMAGE_RESIZE_MODE = crop',\n"
     				+ "please change the parameter IMAGE_RESIZE_MODE to 'square' or 'pad64' in the\n"
     				+ "config pre-preprocessing file.";
-    		throw new Exception(ERROR);
-    		return;
+    		throw new IllegalArgumentException(ERROR);
     	} else {
     		ERROR = "The config file information for the parameter 'IMAGE_RESIZE_MODE' is incorrect."
     				+ "\nThe value provided in the config file (" + CONFIG_FILE_PATH + "')\n"
 					+ "is '" + mode + "'. However the only values allowed are: 'square', 'pad64' and 'XXX'.";
-    		throw new Exception(ERROR);
-    		return;
+    		throw new IllegalArgumentException(ERROR);
     	}
     	
     	// Set the class attributes to be used later
