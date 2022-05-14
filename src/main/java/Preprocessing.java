@@ -40,6 +40,7 @@ import java.util.Set;
 import org.bioimageanalysis.icy.deeplearning.tensor.Tensor;
 import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.INDArrayIndex;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 
@@ -145,7 +146,7 @@ public class Preprocessing {
     	if (inputTensor != null) {
     		inputArray = inputTensor.getDataAsNDArray();
     	} else if (inputArray == null) {
-    		throw new Exception("Runnning the pre-processing requires some input tensor.");
+    		throw new IllegalArgumentException("Runnning the pre-processing requires some input tensor.");
     	}
         
     	inputArray.castTo(DataType.FLOAT);
@@ -157,18 +158,20 @@ public class Preprocessing {
         moldInputs(inputArray);
         
         MaskRcnnAnchors mrccAnchors = new MaskRcnnAnchors(CONFIG);
-        final float[][][] imageAnchors = MaskRcnnAnchors.getAnchors(result, axesOrder);
-        final Tensor<Float> anchors = (Tensor<Float>)Tensor.create((Object)imageAnchors, (Class)Float.class);
+        final float[][][] imageAnchors = MaskRcnnAnchors.getAnchors(inputArray, axesOrder);
+        final Tensor anchors = Tensor.build("input_anchors", "brc", Nd4j.create(imageAnchors));
+        anchors.setIsImage(false);
         
         //final float[][] imageMetas = MaskRcnnMetas.composeImageMeta(im);
         final float[][] imageMetas = MaskRcnnMetas.composeImageMeta(0.0f, ORIGINAL_IMAGE_SIZE, PROCESSING_IMAGE_SIZE, WINDOW_SIZE, (float) SCALE, NUM_CLASSES);
-        final Tensor<Float> metas = (Tensor<Float>)Tensor.create((Object)imageMetas, (Class)Float.class);
+        final Tensor metas = Tensor.build("input_image_meta", "br", Nd4j.create(imageMetas));
+        metas.setIsImage(false);
         
         // Write the runtime parameters to the config file so it can be used by post processing
         writeToConfigFile(CONFIG_FILE_PATH);
         
         // Create the output map
-        map.put("input_image", result);
+        map.put("input_image", inputArray);
         map.put("input_image_meta", metas);
         map.put("input_anchors", anchors);
         return map;
@@ -183,24 +186,18 @@ public class Preprocessing {
 	 * @param configFiles: list of attachments. The files used by the pre-processing
 	 * can then be selected by the name 
 	 */
-    public void setConfigFiles(ArrayList<String> configFiles) {
-    	for (String ff : configFiles) {
-    		String fileName = ff.substring(ff.lastIndexOf(File.separator) + 1);
-    		if (fileName.contentEquals("config.ijm")) {
-    	    	CONFIG_FILE_PATH = ff;
-    	    	break;
-    		}
-    	}
-    	if (CONFIG_FILE_PATH == null && configFiles.size() == 0) {
+    public void setConfigFiles() {
+    	String parentDir = new File(Preprocessing.class.getProtectionDomain().getCodeSource()
+    			.getLocation().getFile()).getParent();
+    	CONFIG_FILE_PATH = new File(parentDir, configFileName).getAbsolutePath();
+
+    	if (CONFIG_FILE_PATH == null) {
     		ERROR = "No parameters file or config file provided for pre-processing.";
-    		return;
-    	} else if (CONFIG_FILE_PATH == null && configFiles.size() > 0) {
-    		ERROR = "A configuration file was not found in the model. The configuration file"
-    				+ "should be called 'config.ijm', please rename the config file if it is "
-    				+ "not named correctly.";
+    		new IllegalArgumentException(ERROR);
     		return;
     	} else if (!(new File(CONFIG_FILE_PATH).exists())) {
     		ERROR = "The configuration file provided during pre-processing does not exist.";
+    		new IllegalArgumentException(ERROR);
     		return;
     	}
     	// Parse parameters from the config file
