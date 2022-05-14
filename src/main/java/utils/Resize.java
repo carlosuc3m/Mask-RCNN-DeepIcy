@@ -6,13 +6,25 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 
 public class Resize {
 	
+	/**
+	 * Upsample an image using the nearest neighbors method. Only for the X and Y plane
+	 * @param im
+	 * 	the image of interest
+	 * @param scaleX
+	 * 	scale along the X axis
+	 * @param scaleY
+	 * 	scale factor along the Y axis
+	 * @param axesOrder
+	 * 	the order in which the axes of the array are
+	 */
 	public static void upscaleXY(INDArray im, int scaleX, int scaleY, String axesOrder) {
 		String nAxesOrder = convertToCompleteAxesOrder(axesOrder);
 		long[] shape = arrayToWantedAxesOrderAddOnes(im.shape(), axesOrder, nAxesOrder);
 		int xInd = nAxesOrder.toLowerCase().indexOf("x");
 		int yInd = nAxesOrder.toLowerCase().indexOf("y");
-		int nX = scaleX * (int) shape[xInd];
-		int nY = scaleY * (int) shape[yInd];
+		long[] targetShape = new long[] {shape[0], shape[1], shape[2], shape[3], shape[4]};
+		targetShape[xInd] = shape[xInd] * scaleX;
+		targetShape[yInd] = shape[yInd] * scaleY;
 		int[] nonXYInds = IntStream.range(0, nAxesOrder.length()).filter(i -> i != xInd && i != yInd).toArray();
 
 		int[] position = new int[5];
@@ -38,7 +50,9 @@ public class Resize {
 									positionNew[nonXYInds[0]] = d0;
 									positionNew[nonXYInds[1]] = d1;
 									positionNew[nonXYInds[2]] = d2;
-									getFlatPosOfNDArray(position, shape)
+									int pos = getFlatPosOfNDArray(position, shape);
+									int nPos = getFlatPosOfNDArray(positionNew, targetShape);
+									targetArr[nPos] = sourceArr[pos];
 								}
 							}
 						}
@@ -46,8 +60,7 @@ public class Resize {
 				}
 			}
 		}
-		
-		
+		im.data().setData(targetArr);
 	}
     
     /**
