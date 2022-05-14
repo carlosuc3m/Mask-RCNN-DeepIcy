@@ -37,8 +37,7 @@
 
 package utils;
 
-import ij.ImagePlus;
-import ij.IJ;
+import org.nd4j.linalg.api.ndarray.INDArray;
 
 public class MaskRcnnMetas {
 	
@@ -80,15 +79,12 @@ public class MaskRcnnMetas {
         this.NUM_CLASSES = 81.0;
     }
     
-    public static void main(final String[] args) {
-        final ImagePlus im = IJ.createImage("aux", 1024, 1024, 3, 24);
-        final float[][] a = composeImageMeta(im);
-        a[0][0] = 2.0f;
-    }
-    
-    public static float[][] composeImageMeta(final ImagePlus im) {
-        final float[] originalImShape = { (float)im.getHeight(), (float)im.getWidth(), (float)im.getNChannels() };
-        final float[] finalShape = { (float)im.getHeight(), (float)im.getWidth(), (float)im.getNChannels() };
+    public static float[][] composeImageMeta(final INDArray im, String axesOrder) {
+    	long[] shape = im.shape();
+        final float[] originalImShape = { (float)shape[axesOrder.indexOf("y")], (float)shape[axesOrder.indexOf("x")],
+        		(float)shape[axesOrder.indexOf("c")] };
+        final float[] finalShape = { (float)shape[axesOrder.indexOf("y")], (float)shape[axesOrder.indexOf("x")],
+        		(float)shape[axesOrder.indexOf("c")] };
         final float[] window = { 0.0f, 0.0f, finalShape[0], finalShape[1] };
         final float[][] imageMetas = composeImageMeta(MaskRcnnMetas.id, originalImShape, finalShape, window, MaskRcnnMetas.scale, MaskRcnnMetas.nClasses);
         return imageMetas;
