@@ -38,10 +38,11 @@
 import java.util.Set;
 
 import org.bioimageanalysis.icy.deeplearning.tensor.Tensor;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 
 import utils.MaskRcnnMetas;
-
+import utils.Resize;
 import utils.ImageProcessingUtils;
 import utils.MaskRcnnAnchors;
 
@@ -146,7 +147,7 @@ public class Preprocessing {
     		throw new Exception("Runnning the pre-processing requires some input tensor.");
     	}
         
-    	// TODO require the image to be 32 bit or convert it here
+    	inputArray.castTo(DataType.FLOAT);
 
         // Create the dictionary of outputs that is going to be outpued by the pre-processing
         final HashMap<String, Object> map = new HashMap<String, Object>();
@@ -343,7 +344,7 @@ public class Preprocessing {
     	ORIGINAL_IMAGE_SIZE = originalImShape;
     	
     	if (scale != 1) {
-    		image = ImageProcessingUtils.resize(image, (int)Math.round(w * scale), (int)Math.round(h * scale));
+    		Resize.upscaleXY(image, (int)Math.round(w * scale), (int)Math.round(h * scale), axesOrder);
     	}
     	
     	// Check if padding is needed

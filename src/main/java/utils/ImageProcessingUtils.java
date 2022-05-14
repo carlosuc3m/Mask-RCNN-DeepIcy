@@ -1,108 +1,189 @@
-/*
- * DeepImageJ
- * 
- * https://deepimagej.github.io/deepimagej/
- *
- * Conditions of use: You are free to use this software for research or educational purposes. 
- * In addition, we expect you to include adequate citations and acknowledgments whenever you 
- * present or publish results that are based on it.
- * 
- * Reference: DeepImageJ: A user-friendly plugin to run deep learning models in ImageJ
- * E. Gomez-de-Mariscal, C. Garcia-Lopez-de-Haro, L. Donati, M. Unser, A. Munoz-Barrutia, D. Sage. 
- * Submitted 2019.
- *
- * Bioengineering and Aerospace Engineering Department, Universidad Carlos III de Madrid, Spain
- * Biomedical Imaging Group, Ecole polytechnique federale de Lausanne (EPFL), Switzerland
- *
- * Corresponding authors: mamunozb@ing.uc3m.es, daniel.sage@epfl.ch
- *
- */
-
-/*
- * Copyright 2019. Universidad Carlos III, Madrid, Spain and EPFL, Lausanne, Switzerland.
- * 
- * This file is part of DeepImageJ.
- * 
- * DeepImageJ is free software: you can redistribute it and/or modify it under the terms of 
- * the GNU General Public License as published by the Free Software Foundation, either 
- * version 3 of the License, or (at your option) any later version.
- * 
- * DeepImageJ is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License along with DeepImageJ. 
- * If not, see <http://www.gnu.org/licenses/>.
- */
 
 package utils;
 
+import java.util.Arrays;
+import java.util.stream.IntStream;
+
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 
 public class ImageProcessingUtils {
 	
-    /**
-     * Resize image to wanted width and height
-     * @param im: image to be resized
-     * @param width: width to be resized
-     * @param height: height to be resized
-     * @return resized image
-     */
-    public static void resize(INDArray im, int width, int height) {
-    	im.data().flush();
-    	im.getProcessor().setInterpolationMethod(2);
-    	ImagePlus resizedImage = IJ.createHyperStack(im.getTitle(), width, height, im.getNChannels(), im.getNSlices(), im.getNFrames(), 32);
-    	for (int c = 0; c < resizedImage.getNChannels(); c ++) {
-    		for (int z = 0; z < resizedImage.getNFrames(); z ++) {
-    			for (int t = 0; t < resizedImage.getNSlices(); t ++) {
-    	    		im.setPositionWithoutUpdate(c + 1, z + 1, t + 1);
-    	    		resizedImage.setPositionWithoutUpdate(c + 1, z + 1, t + 1);
-    	    		ImageProcessor ip = im.getProcessor();
-    	    		ImageProcessor op = ip.resize(width, height, true);
-    	    		resizedImage.setProcessor(op);
-    	    	}
-        	}
-    	}
-    	return resizedImage;
-    }
+	/**
+	 * Upsample an image using the nearest neighbors method. Only for the X and Y plane
+	 * @param im
+	 * 	the image of interest
+	 * @param scaleX
+	 * 	scale along the X axis
+	 * @param scaleY
+	 * 	scale factor along the Y axis
+	 * @param axesOrder
+	 * 	the order in which the axes of the array are
+	 */
+	public static void upscaleXY(INDArray im, int scaleX, int scaleY, String axesOrder) {
+    	if (im.dataType() != DataType.FLOAT)
+    		throw new IllegalArgumentException("The input INDArray should be a FLOAT array");
+		String nAxesOrder = convertToCompleteAxesOrder(axesOrder);
+		long[] shape = arrayToWantedAxesOrderAddOnes(im.shape(), axesOrder, nAxesOrder);
+		int xInd = nAxesOrder.toLowerCase().indexOf("x");
+		int yInd = nAxesOrder.toLowerCase().indexOf("y");
+		long[] targetShape = new long[] {shape[0], shape[1], shape[2], shape[3], shape[4]};
+		targetShape[xInd] = shape[xInd] * scaleX;
+		targetShape[yInd] = shape[yInd] * scaleY;
+		int[] nonXYInds = IntStream.range(0, nAxesOrder.length()).filter(i -> i != xInd && i != yInd).toArray();
+
+		int[] position = new int[5];
+		int[] positionNew = new int[5];
+		float[] sourceArr = im.data().asFloat();
+		float[] targetArr = new float[sourceArr.length * scaleX *scaleY];
+		for (int x = 0; x < (int) shape[xInd]; x ++) {
+			for (int sx = 0; sx < scaleX; sx ++) {
+				int nx = x * scaleX + sx;
+				for (int y = 0; y < (int) shape[yInd]; y ++) {
+					for (int sy = 0; sy < scaleY; sy ++) {
+						int ny = y * scaleY + sy;
+						for (int d0 = 0; d0 < nonXYInds[0]; d0 ++) {
+							for (int d1 = 0; d1 < nonXYInds[0]; d1 ++) {
+								for (int d2 = 0; d2 < nonXYInds[0]; d2 ++) {
+									position[xInd] = x;
+									position[yInd] = y;
+									position[nonXYInds[0]] = d0;
+									position[nonXYInds[1]] = d1;
+									position[nonXYInds[2]] = d2;
+									positionNew[xInd] = nx;
+									positionNew[yInd] = ny;
+									positionNew[nonXYInds[0]] = d0;
+									positionNew[nonXYInds[1]] = d1;
+									positionNew[nonXYInds[2]] = d2;
+									int pos = getFlatPosOfNDArray(position, shape);
+									int nPos = getFlatPosOfNDArray(positionNew, targetShape);
+									targetArr[nPos] = sourceArr[pos];
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		im.data().setData(targetArr);
+	}
     
     /**
      * @param image: image to be padded
      * @param padding: number of values padded to the edges of each axis 
      * ((before_1,after_1), … (before_N, after_N))
      * @param value: value to which the padding will be set
+     * @param axesOrder
+     * 	the order of the dimensions of the array
      * @return padded image of the needed size
      */
-    public static ImagePlus pad(ImagePlus image, double[][] padding, int value) {
-    	int h = image.getHeight();
-    	int w = image.getWidth();
-    	int c = image.getNChannels();
-    	int z = image.getNSlices();
-    	int t = image.getNFrames();
+    public static void pad(INDArray image, double[][] padding, int value, String axesOrder) {
+    	if (image.dataType() != DataType.FLOAT)
+    		throw new IllegalArgumentException("The input INDArray should be a FLOAT array");
+		String nAxesOrder = convertToCompleteAxesOrder(axesOrder);
+		long[] shape = arrayToWantedAxesOrderAddOnes(image.shape(), axesOrder, nAxesOrder);
+		int xInd = axesOrder.toLowerCase().indexOf("x");
+		int yInd = axesOrder.toLowerCase().indexOf("y");
+    	int h = (int) shape[yInd];
+    	int w = (int) shape[xInd];
+    	int c = (int) shape[axesOrder.toLowerCase().indexOf("c")];
+    	int z = (int) shape[axesOrder.toLowerCase().indexOf("z")];
+    	int t = (int) shape[axesOrder.toLowerCase().indexOf("b")];
     	int topPad = (int) padding[0][0];
     	int leftPad = (int) padding[1][0];
     	int newH = h + (int) padding[0][0] + (int) padding[0][1];
     	int newW = w + (int) padding[1][0] + (int) padding[1][1];
-    	ImagePlus paddedIm = IJ.createHyperStack(image.getTitle(), newW, newH, c, z, t, 32);
-    	ImageProcessor ipPad = null;
-    	ImageProcessor ip;
+    	long[] nShape = Arrays.copyOf(shape, shape.length);
+    	nShape[xInd] = newW;
+    	nShape[yInd] = newH;
+    	float[] sourceArr = image.data().asFloat();
+    	float[] targetArr = new float[c * t * z * newH * newW];
+    	int[] position = new int[5];
+    	int[] nPosition = new int[5];
     	for (int cc = 0; cc < c; cc ++) {
     		for (int tt = 0; tt < t; tt ++) {
     			for (int zz = 0; zz < z ; zz ++) {
-					paddedIm.setPositionWithoutUpdate(cc + 1, zz + 1, tt + 1);
-					image.setPositionWithoutUpdate(cc + 1, zz + 1, tt + 1);
     				for (int xx = 0; xx < w; xx ++) {
     					for (int yy = 0; yy < h; yy ++) {
-    						ip = image.getProcessor();
-    						ipPad = paddedIm.getProcessor();
-    						ipPad.putPixelValue(xx + leftPad, yy + topPad, ip.getPixelValue(xx, yy));
+    						position[yInd] = yy;
+    						position[xInd] = xx;
+    						position[axesOrder.toLowerCase().indexOf("c")] = cc;
+    						position[axesOrder.toLowerCase().indexOf("z")] = zz;
+    						position[axesOrder.toLowerCase().indexOf("b")] = tt;
+    						nPosition[yInd] = yy + topPad;
+    						nPosition[xInd] = xx + leftPad;
+    						nPosition[axesOrder.toLowerCase().indexOf("c")] = cc;
+    						nPosition[axesOrder.toLowerCase().indexOf("z")] = zz;
+    						nPosition[axesOrder.toLowerCase().indexOf("b")] = tt;
+    						
     					}
     				}
-    				paddedIm.setProcessor(ipPad);
     			}
     		}
     	}
-    	return paddedIm;
     }
+    
+    /**
+     * Method to obtain the index of a position in a flat array obtained from an NDArray
+     * @param pos
+     * 	array containing positions per axes
+     * @param size
+     * 	the size of the NDArray per dimension
+     * @return the position on a flat array obtained from an NDArray
+     */
+    public static int getFlatPosOfNDArray(int[] pos, long[] size){
+    	int flatPos = 
+    			(int) (pos[0] * (size[1] * size[2] * size[3] * size[4])
+		+ pos[1] * (size[2] * size[3] * size[4])
+		+ pos[2] * (size[3] * size[4])
+		+ pos[3] * (size[4])
+		+ pos[4]);
+    	return flatPos;
+    }
+    
+    /**
+     * Convert the array following given axes order into
+     *  another long[] which follows the target axes order
+     *  The newly added components will be ones.
+     * @param size
+     * 	original array following the original axes order
+     * @param orginalAxes
+     * 	axes order of the original array
+     * @param targetAxes
+     * 	axes order of the target array
+     * @return a size array in the order of the tensor of interest
+     */
+    public static long[] arrayToWantedAxesOrderAddOnes(long[] size, String orginalAxes, String targetAxes) {
+    	orginalAxes = orginalAxes.toLowerCase();
+    	String[] axesArr = targetAxes.toLowerCase().split("");
+    	long[] finalSize = new long[targetAxes.length()];
+    	for (int i = 0; i < finalSize.length; i ++) {
+    		int ind = orginalAxes.indexOf(axesArr[i]);
+    		if (ind == -1) {
+    			finalSize[i] = 1;
+    		} else {
+    			finalSize[i] = size[ind];
+    		}
+    	}
+    	return finalSize;
+    }
+	
+	/**
+	 * Create an axesOrder String with 5 axes "xyczb"
+	 * @param axesOrder
+	 * 	original axes order
+	 * @return axes order with all the axes
+	 */
+	private static String convertToCompleteAxesOrder(String axesOrder) {
+		String allDims = "xyczb";
+		for (String ax : axesOrder.split(""))
+			allDims = allDims.replace(ax, "");
+		axesOrder = axesOrder + allDims;
+		if (axesOrder.length() != 5)
+			throw new IllegalArgumentException("the axesOrder parameter contains not allowed axes. The only"
+					+ "allowe axes are: x, y, c, z and b");
+		return axesOrder;
+		
+	}
 
 }
