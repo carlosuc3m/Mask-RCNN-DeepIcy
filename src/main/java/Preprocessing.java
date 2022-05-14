@@ -230,7 +230,7 @@ public class Preprocessing {
     	} catch (Exception ex) {
     		ERROR = "Cannot parse correctly the parameters 'IMAGE_MIN_DIM', 'IMAGE_MIN_SCALE',\n"
     				+ "'IMAGE_MAX_DIM', 'IMAGE_RESIZE_MODE' and 'NUM_CLASSES' from the config file.";
-    		throw new Exception(ERROR);
+    		throw new IllegalArgumentException(ERROR);
     	}
     	resizeImage(image, IMAGE_MIN_DIM, IMAGE_MIN_SCALE, IMAGE_MAX_DIM, IMAGE_RESIZE_MODE);
     	
