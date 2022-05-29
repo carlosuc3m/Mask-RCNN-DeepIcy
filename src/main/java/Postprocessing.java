@@ -5,7 +5,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class PostProcessing {
+import org.bioimageanalysis.icy.deeplearning.tensor.Tensor;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.indexing.INDArrayIndex;
+import org.nd4j.linalg.indexing.NDArrayIndex;
+
+public class Postprocessing {
 	/**
 	 * Dictionary containing all the parameters parsed from the file
 	 */
@@ -19,6 +25,34 @@ public class PostProcessing {
 	 * Attribute to communicate errors to DeepImageJ plugins
 	 */
 	private static String ERROR = "";
+	
+	private Tensor inputTensor;
+	
+	private Tensor detectionTensor;
+	
+	private String configFileName;
+	
+	private String axesOrder;
+
+	/**
+	 * Constructor that adds the input image to the 
+	 * @param inpTensor
+	 */
+	public Postprocessing(Tensor inpTensor) {
+		inputTensor = inpTensor;
+	}
+	
+	public void setInputFileName(String name) {
+		configFileName = name;
+	}
+	
+	public void setSetectionTensor(Tensor tt) {
+		detectionTensor = tt;
+	}
+	
+	public void setAxesOrder(String str) {
+		axesOrder = str;
+	}
 
 	/**
 	 * Return error that stopped pre-processing to DeepImageJ
@@ -38,23 +72,9 @@ public class PostProcessing {
 	 * ResultsTables outputes by the model.
 	 * @return this method has to return a HashMap with the post-processing results.
 	 */
-    public HashMap<String, Object> deepimagejPostprocessing(final HashMap<String, Object> map) {
-        final Set<String> keys = map.keySet();
-        ImagePlus mask = null;
-        ResultsTable detections = null;
-        for (final String k : keys) {
-            if (k.equals(CONFIG.get("MRCNN_MASK"))) {
-                mask = (ImagePlus) map.get(k);
-            }
-            else {
-                if (!k.equals(CONFIG.get("MRCNN_DETECTION"))) {
-                    continue;
-                }
-                detections = (ResultsTable) map.get(k);
-            }
-        }
+    public HashMap<String, Tensor> apply() {
         // Get the number of objects detected by the net
-        final int nDetections = getNDetections(detections);
+        final int nDetections = getNDetections();
         // If nothing was detected just return null
         if (nDetections == 0) {
         	ERROR = "No object was detected in the input image.";
@@ -65,23 +85,23 @@ public class PostProcessing {
         // Get the class IDs of the detected objects
         final int[] classIds = new int[nDetections];
         for (int i = 0; i < nDetections; ++i) {
-            boxes[i][0] = Double.parseDouble(detections.getStringValue(0, i));
+            boxes[i][0] = Double.parseDouble(detectionTensor.getDataAsNDArray().get.getStringValue(0, i));
             boxes[i][1] = Double.parseDouble(detections.getStringValue(1, i));
             boxes[i][2] = Double.parseDouble(detections.getStringValue(2, i));
             boxes[i][3] = Double.parseDouble(detections.getStringValue(3, i));
             classIds[i] = Integer.parseInt(detections.getStringValue(4, i));
         }
         // Select the masks corresponding to the objects detected
-        final ImagePlus selectedMasks = IJ.createHyperStack("Processed " + mask.getTitle(), mask.getWidth(), mask.getHeight(), 1, nDetections, 1, 32);
+        INDArray selectedMasks = Nd4j.zeros(new int[] {detectionTensor.getShape()[0], detectionTensor.getShape()[1], detectionTensor.getShape()[2], nDetections});
         int z = 0;
         int[] array;
-        for (int length = (array = classIds).length, l = 0; l < length; ++l) {
+        INDArray mask;
+		for (int length = (array = classIds).length, l = 0; l < length; l ++) {
             final int classId = array[l];
-            selectedMasks.setPositionWithoutUpdate(1, z + 1, 1);
-            mask.setPositionWithoutUpdate(classId + 1, z + 1, 1);
-            final ImageProcessor ip = mask.getProcessor();
-            selectedMasks.setProcessor(ip);
-            ++z;
+            mask = detectionTensor.getDataAsNDArray().get(NDArrayIndex.all(), NDArrayIndex.point(l), NDArrayIndex.all(),
+            		NDArrayIndex.all(), NDArrayIndex.point(classId));
+            selectedMasks.put(new INDArrayIndex[] {(INDArrayIndex) NDArrayIndex.all(), (INDArrayIndex) NDArrayIndex.all(),
+            		(INDArrayIndex) NDArrayIndex.all(), (INDArrayIndex) NDArrayIndex.point(l)}, mask);
         }
 
         // String get the needed parameters from the config file
@@ -221,15 +241,16 @@ public class PostProcessing {
     
     /**
      * Get the number of objects detected by the model, that is rows that are non-zero
-     * @param detections: ResultsTable with the output of the network
      * @return number of objects detected
      */
-    private static int getNDetections(final ResultsTable detections) {
+    private int getNDetections() {
         int n = 0;
-        for (int i = 0; i < detections.size(); ++i) {
-            final int label = Integer.parseInt(detections.getStringValue(4, i));
+        for (int i = 0; i < detectionTensor.getShape()[1]; ++i) {
+            int label = detectionTensor.getDataAsNDArray().getInt(new int[] {0, 4, i});
             if (label != 0) {
-                ++n;
+                n ++;
+            } else {
+            	break;
             }
         }
         return n;
