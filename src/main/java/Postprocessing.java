@@ -83,16 +83,14 @@ public class Postprocessing {
         	return null;
         }
         // Get the detected bounding boxes from the output table in normalised coodinates
-        final double[][] boxes = new double[nDetections][4];
+        final double[][] boxes = new double[4][nDetections];
         // Get the class IDs of the detected objects
-        final int[] classIds = new int[nDetections];
-        for (int i = 0; i < nDetections; ++i) {
-            boxes[i][0] = Double.parseDouble(detectionTensor.getData().get.getStringValue(0, i));
-            boxes[i][1] = Double.parseDouble(detections.getStringValue(1, i));
-            boxes[i][2] = Double.parseDouble(detections.getStringValue(2, i));
-            boxes[i][3] = Double.parseDouble(detections.getStringValue(3, i));
-            classIds[i] = Integer.parseInt(detections.getStringValue(4, i));
-        }
+        int[] classIds = new int[nDetections];
+        boxes[0] = detectionTensor.getData().get(NDArrayIndex.all(), NDArrayIndex.point(0), NDArrayIndex.all()).toDoubleVector();
+        boxes[1] = detectionTensor.getData().get(NDArrayIndex.all(), NDArrayIndex.point(1), NDArrayIndex.all()).toDoubleVector();
+        boxes[2] = detectionTensor.getData().get(NDArrayIndex.all(), NDArrayIndex.point(2), NDArrayIndex.all()).toDoubleVector();
+        boxes[3] = detectionTensor.getData().get(NDArrayIndex.all(), NDArrayIndex.point(3), NDArrayIndex.all()).toDoubleVector();
+        classIds = detectionTensor.getData().get(NDArrayIndex.all(), NDArrayIndex.point(4), NDArrayIndex.all()).toIntVector();
         // Select the masks corresponding to the objects detected
         INDArray selectedMasks = Nd4j.zeros(new int[] {detectionTensor.getShape()[0], detectionTensor.getShape()[1], detectionTensor.getShape()[2], nDetections});
         int z = 0;
@@ -150,7 +148,7 @@ public class Postprocessing {
             // TODO add threshold for 0.5
         }
         selectedMasks.close();
-        mask.close();
+        inputTensor.close();
         final HashMap<String, Tensor> outMap = new HashMap<String, Tensor>();
         outMap.put("detections", detectionTensor);
         outMap.put("mask", Tensor.build("masks", "byxc", finalMasks));
