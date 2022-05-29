@@ -105,7 +105,7 @@ public class Preprocessing {
     public HashMap<String, Object> apply() {
     	
     	if (inputTensor != null) {
-    		inputArray = inputTensor.getDataAsNDArray();
+    		inputArray = inputTensor.getData();
     	} else if (inputArray == null) {
     		throw new IllegalArgumentException("Runnning the pre-processing requires some input tensor.");
     	}

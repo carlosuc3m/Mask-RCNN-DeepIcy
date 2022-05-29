@@ -11,6 +11,8 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.INDArrayIndex;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 
+import utils.ImageProcessingUtils;
+
 public class Postprocessing {
 	/**
 	 * Dictionary containing all the parameters parsed from the file
@@ -85,7 +87,7 @@ public class Postprocessing {
         // Get the class IDs of the detected objects
         final int[] classIds = new int[nDetections];
         for (int i = 0; i < nDetections; ++i) {
-            boxes[i][0] = Double.parseDouble(detectionTensor.getDataAsNDArray().get.getStringValue(0, i));
+            boxes[i][0] = Double.parseDouble(detectionTensor.getData().get.getStringValue(0, i));
             boxes[i][1] = Double.parseDouble(detections.getStringValue(1, i));
             boxes[i][2] = Double.parseDouble(detections.getStringValue(2, i));
             boxes[i][3] = Double.parseDouble(detections.getStringValue(3, i));
@@ -98,7 +100,7 @@ public class Postprocessing {
         INDArray mask;
 		for (int length = (array = classIds).length, l = 0; l < length; l ++) {
             final int classId = array[l];
-            mask = detectionTensor.getDataAsNDArray().get(NDArrayIndex.all(), NDArrayIndex.point(l), NDArrayIndex.all(),
+            mask = detectionTensor.getData().get(NDArrayIndex.all(), NDArrayIndex.point(l), NDArrayIndex.all(),
             		NDArrayIndex.all(), NDArrayIndex.point(classId));
             selectedMasks.put(new INDArrayIndex[] {(INDArrayIndex) NDArrayIndex.all(), (INDArrayIndex) NDArrayIndex.all(),
             		(INDArrayIndex) NDArrayIndex.all(), (INDArrayIndex) NDArrayIndex.point(l)}, mask);
@@ -113,8 +115,9 @@ public class Postprocessing {
         float[] processingShape = str2array(processingShapeString);
         float[] window = str2array(windowString);
         
-        final ImagePlus finalMasks = IJ.createHyperStack("finalMask", (int) Math.floor(originalShape[1]), (int) Math.floor(originalShape[0]), 1, nDetections, 1, 32);
-        // Denormalise the bounding boxes to pixel coordinates in the processing shape
+        INDArray finalMasks = Nd4j.zeros(detectionTensor.getShape()[0], (int) Math.floor(originalShape[0]), (int) Math.floor(originalShape[1]), nDetections);
+        
+        // Denormalize the bounding boxes to pixel coordinates in the processing shape
         window = normBoxes(window, processingShape);
         float[] shift = {window[0], window[1], window[0], window[1]};
         // Window height
@@ -129,37 +132,28 @@ public class Postprocessing {
         	}
         }
         
-        // Set the interpolation method
-        selectedMasks.getProcessor().setInterpolationMethod(2);
         // Get the final boxes that indicate where is the mask located in the image
         final int[][] scaledBoxes = denormBoxes(boxes, originalShape);
         // Paste the mask into their corresponding places
         for (int j = 0; j < classIds.length; ++j) {
-            selectedMasks.setPositionWithoutUpdate(1, j + 1, 1);
-            finalMasks.setPositionWithoutUpdate(1, j + 1, 1);
-            ImageProcessor selectedMaskIp = selectedMasks.getProcessor();
-            final ImageProcessor finalMaskIp = finalMasks.getProcessor();
-            final int newHeight = scaledBoxes[j][2] - scaledBoxes[j][0];
-            final int newWidth = scaledBoxes[j][3] - scaledBoxes[j][1];
-            selectedMaskIp = selectedMaskIp.resize(newWidth, newHeight);
-            int xSelected = -1;
-            for (int xFinal = scaledBoxes[j][1]; xFinal < scaledBoxes[j][3]; ++xFinal) {
-                ++xSelected;
-                int ySelected = -1;
-                for (int yFinal = scaledBoxes[j][0]; yFinal < scaledBoxes[j][2]; ++yFinal) {
-                    ++ySelected;
-                    final double val = selectedMaskIp.getPixelValue(xSelected, ySelected);
-                    if (val >= 0.5) {
-                        finalMaskIp.putPixelValue(xFinal, yFinal, 1.0);
-                    }
-                }
-            }
+            int newHeight = scaledBoxes[j][2] - scaledBoxes[j][0];
+            int newWidth = scaledBoxes[j][3] - scaledBoxes[j][1];
+            ImageProcessingUtils.upscaleXY(selectedMasks.get(NDArrayIndex.all(), NDArrayIndex.all(), NDArrayIndex.all(),
+            		NDArrayIndex.point(j)), newWidth / (int) selectedMasks.shape()[2], newHeight / (int) selectedMasks.shape()[1], "byxc");
+    		INDArrayIndex[] idxs = new INDArrayIndex[4];
+    		idxs[0] = NDArrayIndex.all();
+    		idxs[1] = NDArrayIndex.interval(scaledBoxes[j][0], scaledBoxes[j][2]);
+    		idxs[2] = NDArrayIndex.interval(scaledBoxes[j][1], scaledBoxes[j][3]);
+    		idxs[3] = NDArrayIndex.all();
+    		
+            finalMasks.put(idxs, selectedMasks.get(NDArrayIndex.all(), NDArrayIndex.all(), NDArrayIndex.all(), NDArrayIndex.point(j)));
+            // TODO add threshold for 0.5
         }
+        selectedMasks.close();
         mask.close();
-        finalMasks.show();
-        final HashMap<String, Object> outMap = new HashMap<String, Object>();
-        outMap.put(finalMasks.getTitle(), finalMasks);
-        outMap.put(detections.getTitle(), detections);
+        final HashMap<String, Tensor> outMap = new HashMap<String, Tensor>();
+        outMap.put("detections", detectionTensor);
+        outMap.put("mask", Tensor.build("masks", "byxc", finalMasks));
         return outMap;
     }
 
@@ -246,7 +240,7 @@ public class Postprocessing {
     private int getNDetections() {
         int n = 0;
         for (int i = 0; i < detectionTensor.getShape()[1]; ++i) {
-            int label = detectionTensor.getDataAsNDArray().getInt(new int[] {0, 4, i});
+            int label = detectionTensor.getData().getInt(new int[] {0, 4, i});
             if (label != 0) {
                 n ++;
             } else {
